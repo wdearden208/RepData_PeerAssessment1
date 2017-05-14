@@ -1,0 +1,140 @@
+---
+title: "Analyzing Personal Activity Monitoring Data"
+author: "William Dearden"
+date: "May 14, 2017"
+---
+
+## Overview
+This document is the result of the first project in the Johns Hopkins Coursera "Reproducible Research". The purpose of this project is to demonstrate:
+
+* loading and preprocessing data
+* imputing missing values
+* visualizing data
+* answering research questions using data
+* dynamic documents using `Knitr`
+
+## Data
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+* Dataset: [Activity monitoring data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip) [52K]
+
+The variables included in this dataset are:
+
+* **steps**: Number of steps taking in a 5-minute interval (missing
+    values are coded as `NA`)
+
+* **date**: The date on which the measurement was taken in YYYY-MM-DD
+    format
+
+* **interval**: Identifier for the 5-minute interval in which
+    measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+## Loading and preprocessing the data
+
+First, we load the packages necessary to complete this project:
+```{r message=FALSE, warning=FALSE}
+
+library(ggplot2)
+library(magrittr)
+library(dplyr)
+library(readr)
+library(tidyr)
+
+```
+
+Download, unzip and load data into data frame `data`. 
+```{r message = FALSE}
+if(!file.exists("getdata-projectfiles-UCI HAR Dataset.zip")) {
+    tmp <- tempfile()
+    download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", tmp)
+    unzip(tmp)
+    unlink(tmp)
+}
+
+activity <- read_csv("activity.csv")
+```
+
+## What is mean total number of steps taken per day?
+
+We can summarize the activity to plot a histogram of the number of steps in each day and grab the mean and median steps per day:
+```{r} 
+steps_day <- activity %>%
+    group_by(date) %>%
+    summarize(total_steps = sum(steps, na.rm = TRUE))
+ggplot(steps_day, aes(x = total_steps)) + 
+    geom_histogram(binwidth = 2000) +
+    xlab('Number of steps') +
+    ylab('Count') +
+    ggtitle('Total Steps per Day') 
+
+steps_mean <- mean(steps_day$total_steps)
+steps_median <- median(steps_day$total_steps)
+```
+
+The `mean` number of steps per day is `r steps_mean` and the `median` is `r steps_median`.
+
+## What is the average daily activity pattern?
+
+We can also plot of time series of steps per day:
+
+```{r}
+ggplot(steps_day, aes(x = date, y = total_steps)) +
+    geom_line() +
+    xlab('Date') +
+    ylab('Number of Steps') +
+    ggtitle('Number of steps in a day')
+```
+
+It is also easy to find the five minute period with the maximum number of steps:
+
+```{r}
+max(activity$steps, na.rm = TRUE)
+```
+
+## Imputing missing values
+
+We can use `dplyr::count` to get the total number of missing values for `steps`.
+
+```{r}
+(activity_na_sum <- activity %>% count(is.na(steps)))
+```
+
+From that table, we see there are `r activity_na_sum[[2,2]]` missing values.
+
+We use a simple method for imputing missing values. For each time interval, if there is a non-missing value before it, we use the most recent non-missing value. If there is no non-missing value before it, we use the first non-missing value after it. This logic is easily calculated with `tidyr::fill`.
+
+```{r}
+activity_imputed <- activity %>%
+    fill(date, steps, .direction = "down") %>%
+    fill(steps, .direction = "up")
+```
+
+We should note that every missing value ended in activity ended up being replaced by a zero. We can see this with:
+
+```{r}
+full_join(activity, activity_imputed %>% rename(steps_imputed = steps)) %>%
+    filter(is.na(steps)) %>%
+    count(steps_imputed)
+```
+
+Therefore, there is no change in the histogram with the imputed missing values:
+```{r} 
+steps_day_imputed <- activity_imputed %>%
+    group_by(date) %>%
+    summarize(total_steps = sum(steps, na.rm = TRUE))
+ggplot(steps_day_imputed, aes(x = total_steps)) + 
+    geom_histogram(binwidth = 2000) +
+    xlab('Number of steps') +
+    ylab('Count') +
+    ggtitle('Total Steps per Day') 
+
+steps_mean_imputed <- mean(steps_day$total_steps)
+steps_median_imputed <- median(steps_day$total_steps)
+```
+
+The `mean` number of steps per day is `r steps_mean_imputed` and the `median` is `r steps_median_imputed`, which is the same as before.
+
+## Are there differences in activity patterns between weekdays and weekends?
+
