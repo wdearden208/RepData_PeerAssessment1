@@ -41,6 +41,7 @@ library(magrittr)
 library(dplyr)
 library(readr)
 library(tidyr)
+library(lubridate)
 
 ```
 
@@ -138,3 +139,25 @@ The `mean` number of steps per day is `r steps_mean_imputed` and the `median` is
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
+First, we add a variable which determines whether the date is a weekend day. Then we average the number of steps by each interval in the day, separated by weekend and weekdays.
+
+```{r}
+activity_imputed <- activity_imputed %>%
+    mutate(weekend = ifelse(wday(date) %% 6 == 1, "Weekend", "Weekday"))
+
+interval_mean <- activity_imputed %>%
+    group_by(interval, weekend) %>%
+    summarize(mean_steps = mean(steps))
+```
+
+We then plot a time series of the interval mean summary:
+
+```{r fig.width=10, fig.height=8}
+ggplot(interval_mean, aes(x = interval, y = mean_steps)) + 
+    geom_line() +
+    xlab("Interval") +
+    ylab("Mean Number of Steps") +
+    ggtitle("Average number of steps in each interval \n by weekday and weekend") +
+    facet_wrap(~weekend, nrow = 2)
+
+```
